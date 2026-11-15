@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a19">
+<title>Model training</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#fafaf8;--card:#fff;--ink:#1d1d1b;--ink2:#5c5c57;--muted:#8a8a84;--grid:#e6e6e2;--line:#2a78d6;--line2:#eb6834;--dot:#a5a59f;--ref:#5c5c57;--ok:#1c7c3b;--warn:#a86400;--bad:#b3261e;--s1:#cde2fb;--s2:#86b6ef;--s3:#3987e5;--s4:#1c5cab;--s5:#0d366b}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1f1f1d;--ink:#f2f2ef;--ink2:#b4b4ae;--muted:#86867f;--grid:#2e2e2c;--line:#3987e5;--line2:#d95926;--dot:#6f6f69;--ref:#b4b4ae;--ok:#4cc277;--warn:#e0a03a;--bad:#f2766d;--s1:#0d366b;--s2:#1c5cab;--s3:#3987e5;--s4:#86b6ef;--s5:#cde2fb}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom))}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}h2{font-size:15px;margin:0 0 2px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.live{font-size:13px;color:var(--ink2);text-align:right;white-space:nowrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:baseline}
+.dot.on{background:var(--ok)}.dot.stale{background:var(--warn)}
+.banner{border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:14px;border:1px solid var(--warn)}
+.banner.bad{border-color:var(--bad)}.banner.ok{border-color:var(--ok)}
+.tabs{display:flex;border:1px solid var(--grid);border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--card)}
+.tabs button{flex:1;border:0;background:none;color:var(--ink2);font:inherit;font-weight:600;padding:12px;min-height:48px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--line);color:#fff}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:12px}
+.tile b{display:block;font-size:28px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile span{color:var(--ink2);font-size:13px}.tile i{font-style:normal;font-size:13px;color:var(--ok)}
+section.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:14px;margin-bottom:14px}
+.note{color:var(--ink2);font-size:13px;margin:0 0 8px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px}.legend i.dot2{width:8px;height:8px;border-radius:50%}.legend i.dash{height:0;border-top:2px dashed var(--ref)}
+svg{width:100%;display:block;overflow:visible}svg text{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.big{font-size:44px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05}
+.bar{height:10px;background:var(--grid);border-radius:6px;overflow:hidden;margin:10px 0 6px}.bar i{display:block;height:100%;background:var(--line);transition:width .5s}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--grid);font-size:15px}.row:first-of-type{border-top:0}
+.row span:first-child{color:var(--ink2)}.row b{font-variant-numeric:tabular-nums;text-align:right}
+.hist{display:flex;align-items:flex-end;gap:3px;height:56px;margin-top:6px}.hist i{flex:1;background:var(--s3);border-radius:3px 3px 0 0;min-width:3px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--grid)}th{color:var(--ink2);font-weight:600}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 8px;border-radius:6px;font-size:12px;line-height:1.35;display:none;max-width:240px;z-index:9}
+[hidden]{display:none!important}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1 id="title">Model training</h1><div class="note" id="status" style="margin:2px 0 0"></div></div>
+    <div class="live" id="live"></div>
+  </div>
+  <div id="banner" class="banner" hidden role="status"></div>
+  <div class="tabs" role="tablist" aria-label="View">
+    <button role="tab" id="t-progress" aria-selected="true" aria-controls="v-progress">Progress</button>
+    <button role="tab" id="t-time" aria-selected="false" aria-controls="v-time">Time left</button>
+  </div>
+
+  <div id="v-progress" role="tabpanel" aria-labelledby="t-progress">
+    <div class="tiles" id="tiles"></div>
+    <section class="card"><h2>Score by generation</h2><p class="note">Note-start F1 on held-out real piano through a laptop mic. Higher is better.</p>
+      <div class="legend"><span><i style="background:var(--line)"></i>Best of each generation</span><span><i class="dot2" style="background:var(--dot)"></i>Each model</span><span><i class="dash"></i>Starting model</span></div>
+      <svg id="c1" height="230"></svg></section>
+    <section class="card"><h2>More neurons, better score?</h2><p class="note">Each dot is one model. Further right = a bigger chord layer. Darker = later.</p><svg id="c2" height="210"></svg></section>
+    <section class="card"><h2>Several instruments at once</h2><p class="note">The same score on held-out songs with many instruments playing together.</p>
+      <div class="legend"><span><i style="background:var(--line2)"></i>Best of each generation</span><span><i class="dash"></i>Starting model</span></div><svg id="c3" height="190"></svg></section>
+    <section class="card"><h2>Latest generation</h2><div class="scroll"><table id="tbl"></table></div></section>
+    <section class="card" id="final" hidden><h2>Final test on the official piano sets</h2><p class="note">Scored by the app's own pipeline, next to the model that ships today.</p><div class="scroll"><table id="ftbl"></table></div></section>
+  </div>
+
+  <div id="v-time" role="tabpanel" aria-labelledby="t-time" hidden>
+    <section class="card"><h2>This generation</h2>
+      <div class="big" id="gleft">–</div><div class="note" id="gwhen" style="margin:4px 0 0"></div>
+      <div class="bar" role="progressbar" aria-label="Generation progress" aria-valuemin="0" aria-valuemax="100" id="gbar"><i style="width:0"></i></div>
+      <div class="note" id="gmembers" style="margin:0"></div></section>
+    <section class="card"><h2>The whole run</h2>
+      <div class="row"><span>Stops at</span><b id="endat">–</b></div>
+      <div class="row"><span>Time left</span><b id="endleft">–</b></div>
+      <div class="row"><span>A generation takes</span><b id="avg">–</b></div>
+      <div class="row"><span>More generations to come</span><b id="more">–</b></div>
+      <div class="row"><span>Started</span><b id="started">–</b></div></section>
+    <section class="card"><h2>How long each generation took</h2><p class="note">Minutes, newest on the right.</p><div class="hist" id="hist"></div><div class="note" id="histnote" style="margin:6px 0 0"></div></section>
+    <p class="note">The estimate is the average of the last few generations, so it shifts a little as the models change. After the stop time the best model is exported and scored on the test sets, which takes a few more minutes.</p>
+  </div>
+  <div class="foot" id="foot"></div>
+</main>
+<div class="tip" id="tip"></div>
+<script>
+'use strict';
+const REPO = '902isaac/pitchez-progress';
+const params = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+let D = null, lastFetch = 0, fetchedOk = false;
+
+/* ---------- data ---------- */
+async function load() {
+  const urls = params.get('src') ? [params.get('src')] : [
+    [`https://api.github.com/repos/${REPO}/contents/status.json?ref=data`, { headers: { Accept: 'application/vnd.github.raw+json' } }],
+    [`https://raw.githubusercontent.com/${REPO}/data/status.json?t=${Date.now()}`, {}],
+  ];
+  for (const u of urls) {
+    try {
+      const [url, opt] = Array.isArray(u) ? u : [u, {}];
+      const r = await fetch(url, { cache: 'no-store', ...opt });
+      if (!r.ok) continue;
+      D = await r.json(); lastFetch = Date.now(); fetchedOk = true; render(); return;
+    } catch { /* try the next */ }
+  }
+  fetchedOk = false; renderBanner();
+}
+
+/* ---------- formatting ---------- */
+const f3 = (v) => (v == null ? '–' : Number(v).toFixed(3));
+const dur = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return h ? `${h} h ${String(m).padStart(2, '0')} min` : m ? `${m} min ${String(sec).padStart(2, '0')} s` : `${sec} s`; };
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const day = (t) => new Date(t * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+const now = () => Date.now() / 1000;
+
+/* ---------- tabs ---------- */
+function tab(name) {
+  for (const n of ['progress', 'time']) { $('t-' + n).setAttribute('aria-selected', n === name); $('v-' + n).hidden = n !== name; }
+  history.replaceState(null, '', '#' + name); if (D) draw();
+}
+$('t-progress').onclick = () => tab('progress'); $('t-time').onclick = () => tab('time');
+
+/* ---------- banner, header ---------- */
+function renderBanner() {
+  const b = $('banner'); if (!D) { b.hidden = false; b.className = 'banner bad'; b.textContent = 'Could not load the progress numbers. Check your connection and try again in a minute.'; return; }
+  const age = now() - D.updated;
+  if (D.finished) { b.hidden = false; b.className = 'banner ok'; b.textContent = 'The run has finished. These are the final numbers.'; }
+  else if (D.stalled) { b.hidden = false; b.className = 'banner bad'; b.textContent = 'This generation is taking far longer than usual. Training may have stopped; check the computer.'; }
+  else if (age > 600) { b.hidden = false; b.className = 'banner'; b.textContent = `No update for ${dur(age)}. The computer may be asleep, offline or switched off. Training only continues while it is on.`; }
+  else if (!fetchedOk) { b.hidden = false; b.className = 'banner'; b.textContent = 'Could not refresh just now. Showing the last numbers.'; }
+  else b.hidden = true;
+  const live = $('live'), on = !D.finished && age <= 600;
+  live.innerHTML = `<span class="dot ${on ? 'on' : D.finished ? '' : 'stale'}"></span>${D.finished ? 'Finished' : on ? 'Live' : 'Paused'}<br>updated ${dur(age)} ago`;
+}
+
+/* ---------- derived numbers ---------- */
+function derived() {
+  const R = D.results || [], gens = [...new Set(R.map((r) => r.generation))].sort((a, b) => a - b);
+  const best = (g, k) => Math.max(...R.filter((r) => r.generation === g).map(k));
+  const last = gens.length ? gens[gens.length - 1] : null;
+  const lastBest = last == null ? null : R.filter((r) => r.generation === last).sort((a, b) => b.score - a.score)[0];
+  const overall = R.length ? R.slice().sort((a, b) => b.score - a.score)[0] : null;
+  return { R, gens, best, last, lastBest, overall };
+}
+
+function render() { renderBanner(); draw(); }
+function draw() {
+  if (!D) return;
+  const d = derived(), B = D.baseline;
+  $('title').textContent = D.title || 'Model training';
+  $('status').textContent = D.status || '';
+  const bestNow = d.overall ? d.overall.score : null, gain = bestNow != null && B ? bestNow - B.score : null;
+  $('tiles').innerHTML = [
+    [f3(bestNow), 'best score so far', gain != null ? `<i>+${gain.toFixed(3)} vs start</i>` : ''],
+    [f3(B && B.score), 'starting model', ''],
+    [d.last == null ? '–' : String(d.last), 'generations done', D.generation != null && !D.finished ? `<i>now on ${D.generation}</i>` : ''],
+    [d.overall ? String(d.overall.units) : '–', 'neurons in the best chord layer', ''],
+  ].map(([v, l, x]) => `<div class="tile"><b>${v}</b><span>${l}</span> ${x}</div>`).join('');
+  if (!$('v-progress').hidden) { chartBest($('c1'), (r) => r.score, 'var(--line)', true); chartScatter($('c2')); chartBest($('c3'), (r) => (r.chords == null ? 0 : r.chords), 'var(--line2)', false, true); table(d); finalTable(); }
+  if (!$('v-time').hidden) timeView();
+  $('foot').textContent = D.name ? `${D.name} · numbers only, refreshed about every 2 minutes` : '';
+}
+
+/* ---------- time tab (ticks every second) ---------- */
+function timeView() {
+  if (!D) return;
+  const t = now(), rec = D.recent_gen_seconds || [], avg = D.avg_gen_seconds;
+  if (D.finished) { $('gleft').textContent = 'Done'; $('gwhen').textContent = 'The run has finished.'; $('gbar').firstElementChild.style.width = '100%'; }
+  else if (D.generation == null || !D.gen_started || !avg) { $('gleft').textContent = '–'; $('gwhen').textContent = D.status || ''; }
+  else {
+    const eta = D.gen_started + avg, left = eta - t, elapsed = t - D.gen_started, pct = Math.min(99, Math.max(2, (100 * elapsed) / avg));
+    $('gleft').textContent = left > 0 ? dur(left) : 'any moment';
+    $('gwhen').textContent = left > 0 ? `Generation ${D.generation} should finish about ${clock(eta)}.` : `Taking longer than the usual ${dur(avg)}. Generation ${D.generation} is still running.`;
+    $('gbar').firstElementChild.style.width = pct + '%'; $('gbar').setAttribute('aria-valuenow', Math.round(pct));
+    $('gmembers').textContent = `${D.members_done ?? 0} of ${D.members_total ?? '?'} models finished this generation`;
+  }
+  const left = D.deadline - t;
+  $('endat').textContent = D.finished ? 'Finished' : day(D.deadline);
+  $('endleft').textContent = D.finished ? '–' : left > 0 ? dur(left) : 'stopping after this generation';
+  $('avg').textContent = avg ? dur(avg) : '–';
+  $('more').textContent = !D.finished && avg && left > 0 ? `about ${Math.max(0, Math.floor((D.deadline - (D.gen_started ? D.gen_started + avg : t)) / avg))}` : '–';
+  $('started').textContent = D.started ? day(D.started) : '–';
+  const mx = Math.max(1, ...rec);
+  $('hist').innerHTML = rec.map((s, i) => `<i style="height:${Math.max(6, (100 * s) / mx)}%" title="${(s / 60).toFixed(1)} min"></i>`).join('');
+  $('histnote').textContent = rec.length ? `Last ${rec.length}: ${rec.map((s) => (s / 60).toFixed(1)).join(', ')} min. Bigger batches (generation 5 on) take longer and learn from twice the data.` : '';
+}
+setInterval(() => { if (D && !$('v-time').hidden) timeView(); if (D) renderBanner(); }, 1000);
+
+/* ---------- charts ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+function el(svg, tag, a) { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; }
+const tipEl = $('tip');
+function showTip(e, html) { const t = e.touches ? e.touches[0] : e; tipEl.innerHTML = html; tipEl.style.display = 'block'; tipEl.style.left = Math.max(6, Math.min(innerWidth - 250, t.clientX - 100)) + 'px'; tipEl.style.top = Math.max(6, t.clientY - 78) + 'px'; }
+const hideTip = () => (tipEl.style.display = 'none');
+document.addEventListener('touchstart', (e) => { if (!e.target.closest('svg')) hideTip(); }, { passive: true });
+function frame(svg, x0, x1, y0, y1, xlab, tickEvery) {
+  svg.innerHTML = ''; const W = svg.clientWidth || 340, H = +svg.getAttribute('height'), P = { l: 40, r: 12, t: 8, b: 36 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const X = (v) => P.l + ((v - x0) / Math.max(1e-9, x1 - x0)) * (W - P.l - P.r), Y = (v) => H - P.b - ((v - y0) / Math.max(1e-9, y1 - y0)) * (H - P.t - P.b);
+  for (let i = 0; i <= 4; i++) { const v = y0 + ((y1 - y0) * i) / 4; el(svg, 'line', { x1: P.l, x2: W - P.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)' }); el(svg, 'text', { x: P.l - 6, y: Y(v) + 4, 'text-anchor': 'end' }).textContent = v.toFixed(2); }
+  const step = Math.max(1, Math.ceil((x1 - x0) / tickEvery)); for (let t = Math.ceil(x0); t <= x1; t += step) el(svg, 'text', { x: X(t), y: H - 20, 'text-anchor': 'middle' }).textContent = t;
+  el(svg, 'text', { x: (P.l + W - P.r) / 2, y: H - 4, 'text-anchor': 'middle' }).textContent = xlab;
+  return { X, Y, W, H, P };
+}
+const span = (vals, pad) => { const lo = Math.min(...vals), hi = Math.max(...vals); const p = Math.max(pad, (hi - lo) * 0.15); return [Math.max(0, lo - p), Math.min(1, hi + p)]; };
+function empty(svg, msg) { svg.innerHTML = ''; const W = svg.clientWidth || 340; svg.setAttribute('viewBox', `0 0 ${W} ${svg.getAttribute('height')}`); el(svg, 'text', { x: W / 2, y: +svg.getAttribute('height') / 2, 'text-anchor': 'middle' }).textContent = msg; }
+function chartBest(svg, key, color, dots, hasBase) {
+  const d = derived(), B = D.baseline, R = d.R.filter((r) => key(r) > 0 || !hasBase), gens = [...new Set(R.map((r) => r.generation))].sort((a, b) => a - b);
+  if (!gens.length) return empty(svg, 'Waiting for the first generation…');
+  const base = B ? (hasBase ? (B.chords == null ? null : B.chords) : B.score) : null, vals = R.map(key).concat(base != null ? [base] : []), [y0, y1] = span(vals, 0.02), x0 = Math.min(0, gens[0]), x1 = Math.max(1, gens[gens.length - 1]);
+  const { X, Y } = frame(svg, x0, x1, y0, y1, 'generation', 6);
+  if (base != null) el(svg, 'line', { x1: X(x0), x2: X(x1), y1: Y(base), y2: Y(base), stroke: 'var(--ref)', 'stroke-dasharray': '5 4', 'stroke-width': 1.5 });
+  if (dots) for (const r of R) { el(svg, 'circle', { cx: X(r.generation), cy: Y(key(r)), r: 3.5, fill: 'var(--dot)' }); const h = el(svg, 'circle', { cx: X(r.generation), cy: Y(key(r)), r: 12, fill: 'transparent' }); const tip = (e) => showTip(e, `Generation ${r.generation}, model ${r.id}<br>Score ${f3(key(r))}<br>${r.units} chord neurons · batch ${r.batch}`); h.addEventListener('mousemove', tip); h.addEventListener('touchstart', tip, { passive: true }); h.addEventListener('mouseleave', hideTip); }
+  const bestAt = (g) => Math.max(...R.filter((r) => r.generation === g).map(key)), pts = gens.map((g) => [X(g), Y(bestAt(g))]);
+  el(svg, 'path', { d: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(''), fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linejoin': 'round' });
+  const lp = pts[pts.length - 1]; el(svg, 'circle', { cx: lp[0], cy: lp[1], r: 5, fill: color, stroke: 'var(--card)', 'stroke-width': 2 });
+  el(svg, 'text', { x: Math.min(lp[0], svg.clientWidth - 40), y: lp[1] - 10, 'text-anchor': 'end', style: 'fill:var(--ink);font-weight:600' }).textContent = f3(bestAt(gens[gens.length - 1]));
+}
+function chartScatter(svg) {
+  const R = derived().R; if (!R.length) return empty(svg, 'Waiting for the first generation…');
+  const x1 = Math.max(16, ...R.map((r) => r.units)), [y0, y1] = span(R.map((r) => r.score).concat(D.baseline ? [D.baseline.score] : []), 0.02), { X, Y } = frame(svg, 0, x1, y0, y1, 'chord-layer neurons', 5);
+  const steps = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)'], gmax = Math.max(1, ...R.map((r) => r.generation));
+  for (const r of R) { el(svg, 'circle', { cx: X(r.units), cy: Y(r.score), r: 5, fill: steps[Math.min(4, Math.floor((Math.max(0, r.generation) / gmax) * 4.999))], stroke: 'var(--card)', 'stroke-width': 1.5 }); const h = el(svg, 'circle', { cx: X(r.units), cy: Y(r.score), r: 12, fill: 'transparent' }); const tip = (e) => showTip(e, `Generation ${r.generation}, model ${r.id}<br>${r.units} chord neurons<br>Score ${f3(r.score)}`); h.addEventListener('mousemove', tip); h.addEventListener('touchstart', tip, { passive: true }); h.addEventListener('mouseleave', hideTip); }
+}
+function table(d) {
+  const rows = d.last == null ? [] : d.R.filter((r) => r.generation === d.last).sort((a, b) => b.score - a.score);
+  $('tbl').innerHTML = '<tr><th>Model</th><th>Score</th><th>Chords</th><th>Neurons</th><th>Weights</th><th>Learn rate</th></tr>' + rows.map((r) => `<tr><td>${r.id}</td><td><b>${f3(r.score)}</b></td><td>${f3(r.chords)}</td><td>${r.units}</td><td>${(r.weights || 0).toLocaleString()}</td><td>${r.lr != null ? r.lr.toExponential(1) : '–'}</td></tr>`).join('');
+}
+function finalTable() {
+  const F = D.final; $('final').hidden = !F || !F.length; if (!F || !F.length) return;
+  $('ftbl').innerHTML = '<tr><th>Test set</th><th>New model</th><th>Today’s model</th></tr>' + F.map((f) => `<tr><td>${f.set}</td><td><b>${f3(f.new)}</b></td><td>${f3(f.base)}</td></tr>`).join('');
+}
+addEventListener('resize', () => { if (D) draw(); });
+if (location.hash === '#time') tab('time');
+load(); setInterval(load, 90_000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastFetch > 20_000) load(); });
+</script>
+</body>
+</html>
