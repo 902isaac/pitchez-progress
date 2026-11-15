@@ -50,6 +50,10 @@ th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--grid)
     <div class="live" id="live"></div>
   </div>
   <div id="banner" class="banner" hidden role="status"></div>
+  <div class="tabs" role="tablist" aria-label="Which model" style="margin-bottom:6px">
+    <button role="tab" id="r-piano" aria-selected="true">Piano</button>
+    <button role="tab" id="r-voice" aria-selected="false">Voice</button>
+  </div>
   <div class="tabs" role="tablist" aria-label="View">
     <button role="tab" id="t-progress" aria-selected="true" aria-controls="v-progress">Progress</button>
     <button role="tab" id="t-time" aria-selected="false" aria-controls="v-time">Time left</button>
@@ -57,14 +61,14 @@ th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--grid)
 
   <div id="v-progress" role="tabpanel" aria-labelledby="t-progress">
     <div class="tiles" id="tiles"></div>
-    <section class="card"><h2>Score by generation</h2><p class="note">Note-start F1 on held-out real piano through a laptop mic. Higher is better.</p>
+    <section class="card"><h2>Score by generation</h2><p class="note" id="n1">Note-start F1 on held-out real piano through a laptop mic. Higher is better.</p>
       <div class="legend"><span><i style="background:var(--line)"></i>Best of each generation</span><span><i class="dot2" style="background:var(--dot)"></i>Each model</span><span><i class="dash"></i>Starting model</span></div>
       <svg id="c1" height="230"></svg></section>
-    <section class="card"><h2>More neurons, better score?</h2><p class="note">Each dot is one model. Further right = a bigger chord layer. Darker = later.</p><svg id="c2" height="210"></svg></section>
-    <section class="card"><h2>Several instruments at once</h2><p class="note">The same score on held-out songs with many instruments playing together.</p>
+    <section class="card"><h2>More neurons, better score?</h2><p class="note">Each dot is one model. Further right = a bigger extra layer. Darker = later.</p><svg id="c2" height="210"></svg></section>
+    <section class="card"><h2 id="h3">Several instruments at once</h2><p class="note" id="n3">The same score on held-out songs with many instruments playing together.</p>
       <div class="legend"><span><i style="background:var(--line2)"></i>Best of each generation</span><span><i class="dash"></i>Starting model</span></div><svg id="c3" height="190"></svg></section>
     <section class="card"><h2>Latest generation</h2><div class="scroll"><table id="tbl"></table></div></section>
-    <section class="card" id="final" hidden><h2>Final test on the official piano sets</h2><p class="note">Scored by the app's own pipeline, next to the model that ships today.</p><div class="scroll"><table id="ftbl"></table></div></section>
+    <section class="card" id="final" hidden><h2 id="hf">Final test on the official piano sets</h2><p class="note">Scored by the app's own pipeline, next to the model that ships today.</p><div class="scroll"><table id="ftbl"></table></div></section>
   </div>
 
   <div id="v-time" role="tabpanel" aria-labelledby="t-time" hidden>
@@ -88,14 +92,19 @@ th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--grid)
 'use strict';
 const REPO = '902isaac/pitchez-progress';
 const params = new URLSearchParams(location.search);
+let RUN = params.get('run') === 'voice' || /voice/.test(location.hash) ? 'voice' : 'piano';
+const TEXT = {
+  piano: { n1: 'Note-start F1 on held-out real piano through a laptop mic. Higher is better.', h3: 'Several instruments at once', n3: 'The same score on held-out songs with many instruments playing together.', c3: 'Several instruments', hf: 'Final test on the official piano sets', file: 'status.json' },
+  voice: { n1: 'The average of two held-out tests: real singing, and humming through a laptop mic. Higher is better.', h3: 'Humming on its own', n3: 'The humming half of the score (laptop mic, people the model never heard). The score above also includes real singing.', c3: 'Humming', hf: 'Final test on the official voice sets', file: 'status-voice.json' },
+};
 const $ = (id) => document.getElementById(id);
 let D = null, lastFetch = 0, fetchedOk = false;
 
 /* ---------- data ---------- */
 async function load() {
   const urls = params.get('src') ? [params.get('src')] : [
-    [`https://api.github.com/repos/${REPO}/contents/status.json?ref=data`, { headers: { Accept: 'application/vnd.github.raw+json' } }],
-    [`https://raw.githubusercontent.com/${REPO}/data/status.json?t=${Date.now()}`, {}],
+    [`https://api.github.com/repos/${REPO}/contents/${TEXT[RUN].file}?ref=data`, { headers: { Accept: 'application/vnd.github.raw+json' } }],
+    [`https://raw.githubusercontent.com/${REPO}/data/${TEXT[RUN].file}?t=${Date.now()}`, {}],
   ];
   for (const u of urls) {
     try {
@@ -114,6 +123,14 @@ const dur = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 36
 const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const day = (t) => new Date(t * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 const now = () => Date.now() / 1000;
+
+/* ---------- which model ---------- */
+function setRun(r) {
+  RUN = r; D = null; for (const n of ['piano', 'voice']) $('r-' + n).setAttribute('aria-selected', n === r);
+  const x = new URL(location.href); x.searchParams.set('run', r); history.replaceState(null, '', x); load();
+}
+$('r-piano').onclick = () => setRun('piano'); $('r-voice').onclick = () => setRun('voice');
+for (const n of ['piano', 'voice']) $('r-' + n).setAttribute('aria-selected', n === RUN);
 
 /* ---------- tabs ---------- */
 function tab(name) {
@@ -150,13 +167,14 @@ function draw() {
   if (!D) return;
   const d = derived(), B = D.baseline;
   $('title').textContent = D.title || 'Model training';
+  const T = TEXT[RUN]; $('n1').textContent = T.n1; $('h3').textContent = T.h3; $('n3').textContent = T.n3; $('hf').textContent = T.hf;
   $('status').textContent = D.status || '';
   const bestNow = d.overall ? d.overall.score : null, gain = bestNow != null && B ? bestNow - B.score : null;
   $('tiles').innerHTML = [
     [f3(bestNow), 'best score so far', gain != null ? `<i>+${gain.toFixed(3)} vs start</i>` : ''],
     [f3(B && B.score), 'starting model', ''],
     [d.last == null ? '–' : String(d.last), 'generations done', D.generation != null && !D.finished ? `<i>now on ${D.generation}</i>` : ''],
-    [d.overall ? String(d.overall.units) : '–', 'neurons in the best chord layer', ''],
+    [d.overall ? String(d.overall.units) : '–', 'neurons in the best extra layer', ''],
   ].map(([v, l, x]) => `<div class="tile"><b>${v}</b><span>${l}</span> ${x}</div>`).join('');
   if (!$('v-progress').hidden) { chartBest($('c1'), (r) => r.score, 'var(--line)', true); chartScatter($('c2')); chartBest($('c3'), (r) => (r.chords == null ? 0 : r.chords), 'var(--line2)', false, true); table(d); finalTable(); }
   if (!$('v-time').hidden) timeView();
@@ -184,7 +202,7 @@ function timeView() {
   $('started').textContent = D.started ? day(D.started) : '–';
   const mx = Math.max(1, ...rec);
   $('hist').innerHTML = rec.map((s, i) => `<i style="height:${Math.max(6, (100 * s) / mx)}%" title="${(s / 60).toFixed(1)} min"></i>`).join('');
-  $('histnote').textContent = rec.length ? `Last ${rec.length}: ${rec.map((s) => (s / 60).toFixed(1)).join(', ')} min. Bigger batches (generation 5 on) take longer and learn from twice the data.` : '';
+  $('histnote').textContent = rec.length ? `Last ${rec.length}: ${rec.map((s) => (s / 60).toFixed(1)).join(', ')} min. ` : '';
 }
 setInterval(() => { if (D && !$('v-time').hidden) timeView(); if (D) renderBanner(); }, 1000);
 
@@ -226,7 +244,7 @@ function chartScatter(svg) {
 }
 function table(d) {
   const rows = d.last == null ? [] : d.R.filter((r) => r.generation === d.last).sort((a, b) => b.score - a.score);
-  $('tbl').innerHTML = '<tr><th>Model</th><th>Score</th><th>Chords</th><th>Neurons</th><th>Weights</th><th>Learn rate</th></tr>' + rows.map((r) => `<tr><td>${r.id}</td><td><b>${f3(r.score)}</b></td><td>${f3(r.chords)}</td><td>${r.units}</td><td>${(r.weights || 0).toLocaleString()}</td><td>${r.lr != null ? r.lr.toExponential(1) : '–'}</td></tr>`).join('');
+  $('tbl').innerHTML = `<tr><th>Model</th><th>Score</th><th>${RUN === 'voice' ? 'Humming' : 'Chords'}</th><th>Neurons</th><th>Weights</th><th>Learn rate</th></tr>` + rows.map((r) => `<tr><td>${r.id}</td><td><b>${f3(r.score)}</b></td><td>${f3(r.chords)}</td><td>${r.units}</td><td>${(r.weights || 0).toLocaleString()}</td><td>${r.lr != null ? r.lr.toExponential(1) : '–'}</td></tr>`).join('');
 }
 function finalTable() {
   const F = D.final; $('final').hidden = !F || !F.length; if (!F || !F.length) return;
